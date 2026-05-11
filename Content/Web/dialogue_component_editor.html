@@ -9470,6 +9470,34 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Alt+P = toggle PIE in UE via the bridge (start if stopped, stop if playing).
+// Mirrors UE's stock Alt+P keybind but works from the browser window.
+document.addEventListener('keydown', e => {
+  if (e.altKey && (e.key === 'p' || e.key === 'P')) {
+    const t = e.target; const tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    e.preventDefault();
+    if (!_bridgeOnline) { showToast('Bridge offline'); return; }
+    const code =
+      "import unreal\n" +
+      "les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)\n" +
+      "playing = False\n" +
+      "try: playing = bool(les.is_in_play_in_editor())\n" +
+      "except Exception: pass\n" +
+      "if playing:\n" +
+      "    les.editor_request_end_play()\n" +
+      "    _result = {'ok': True, 'action': 'stop'}\n" +
+      "else:\n" +
+      "    unreal.DCEditorLibrary.start_pie()\n" +
+      "    _result = {'ok': True, 'action': 'start'}\n";
+    bridgeFetch('/py', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code}) })
+      .then(res => {
+        if (!res || !res.ok) showToast('PIE toggle failed: ' + ((res && res.error) || 'unknown'));
+        else if (res.action) showToast(res.action === 'stop' ? 'Stopped PIE' : 'Started PIE');
+      });
+  }
+});
+
 // Boot
 bridgeInit();
 setInterval(() => { if (!document.hidden) bridgeFetch('/health').then(h => setBridgeStatus(!!h.ok, h.ok ? 'Bridge online' : 'Bridge offline')); }, 5000);
